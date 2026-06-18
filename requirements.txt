@@ -1,0 +1,24 @@
+# LLM API clients
+openai>=1.30.0
+google-genai>=1.0.0
+
+# Data processing
+pandas>=2.0.0
+
+# Evaluation
+rouge-score>=0.1.2
+underthesea>=6.8.0
+
+# Utilities
+pyyaml>=6.0
+python-dotenv>=1.0.0
+tqdm>=4.65.0
+
+# Local ML/RL Training (Phase 2)
+torch
+transformers
+accelerate
+peft
+trl
+bitsandbytes
+datasets

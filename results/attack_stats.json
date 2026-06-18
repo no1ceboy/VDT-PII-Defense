@@ -1,0 +1,68 @@
+{
+  "overall": {
+    "total": 150,
+    "success": 46,
+    "asr": 0.3067
+  },
+  "by_category": {
+    "naive_override": {
+      "total": 30,
+      "success": 19,
+      "asr": 0.6333
+    },
+    "summary_biasing": {
+      "total": 30,
+      "success": 9,
+      "asr": 0.3
+    },
+    "pii_extraction": {
+      "total": 30,
+      "success": 1,
+      "asr": 0.0333
+    },
+    "persona_hijacking": {
+      "total": 30,
+      "success": 2,
+      "asr": 0.0667
+    },
+    "stealth_injection": {
+      "total": 30,
+      "success": 15,
+      "asr": 0.5
+    }
+  },
+  "by_model": {
+    "openrouter/owl-alpha": {
+      "total": 50,
+      "success": 11,
+      "asr": 0.22
+    },
+    "openai/gpt-oss-120b:free": {
+      "total": 50,
+      "success": 26,
+      "asr": 0.52
+    },
+    "gemini-3.1-flash-lite": {
+      "total": 50,
+      "success": 9,
+      "asr": 0.18
+    }
+  },
+  "by_difficulty": {
+    "easy": {
+      "total": 90,
+      "success": 29,
+      "asr": 0.3222
+    },
+    "medium": {
+      "total": 30,
+      "success": 2,
+      "asr": 0.0667
+    },
+    "hard": {
+      "total": 30,
+      "success": 15,
+      "asr": 0.5
+    }
+  }
+}
