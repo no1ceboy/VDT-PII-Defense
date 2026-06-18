@@ -77,6 +77,8 @@ def main():
         optim="paged_adamw_32bit",
         fp16=True,
         beta=0.1, # KL penalty
+        report_to="wandb",
+        run_name="vdt-pii-defense-dpo",
     )
     
     trainer = DPOTrainer(

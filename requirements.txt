@@ -22,3 +22,4 @@ peft
 trl
 bitsandbytes
 datasets
+wandb
