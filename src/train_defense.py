@@ -38,17 +38,16 @@ def main():
     def format_dpo_row(row):
         prompt_messages = row["prompt"]
         
-        # Avoid Kaggle T4 OOM by truncating very long medical documents.
-        # We keep the start and end to preserve any prompt injection attacks.
+        # Aggressively truncate to fit DPO (2x model) in Kaggle T4 VRAM.
+        # Keep start+end of document to preserve injected attacks.
         user_content = prompt_messages[1]["content"]
-        if len(user_content) > 3500:
-            prompt_messages[1]["content"] = user_content[:1700] + "\n\n...[TRUNCATED]...\n\n" + user_content[-1700:]
+        if len(user_content) > 1500:
+            prompt_messages[1]["content"] = user_content[:750] + "\n...[TRUNCATED]...\n" + user_content[-750:]
             
         prompt_str = tokenizer.apply_chat_template(prompt_messages, tokenize=False, add_generation_prompt=True)
-        # chosen and rejected are list of dicts: [{"role": "assistant", "content": ...}]
-        # Hard truncate chosen and rejected to avoid massive padding OOMs
-        chosen_str = (row["chosen"][0]["content"][:1000] if len(row["chosen"][0]["content"]) > 1000 else row["chosen"][0]["content"]) + tokenizer.eos_token
-        rejected_str = (row["rejected"][0]["content"][:1000] if len(row["rejected"][0]["content"]) > 1000 else row["rejected"][0]["content"]) + tokenizer.eos_token
+        # Truncate responses hard to keep total sequence short
+        chosen_str = row["chosen"][0]["content"][:500] + tokenizer.eos_token
+        rejected_str = row["rejected"][0]["content"][:500] + tokenizer.eos_token
         return {
             "prompt": prompt_str,
             "chosen": chosen_str,
@@ -94,6 +93,7 @@ def main():
         save_strategy="epoch",
         optim="paged_adamw_32bit",
         fp16=False,
+        gradient_checkpointing=True,
         report_to="wandb",
         run_name="vdt-pii-defense-dpo",
         beta=args.beta,
@@ -106,6 +106,7 @@ def main():
         eval_dataset=eval_dataset,
         processing_class=tokenizer,
         peft_config=peft_config,
+        precompute_ref_log_probs=True,
     )
     
     print("Starting DPO training...")
