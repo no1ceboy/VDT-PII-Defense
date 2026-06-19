@@ -18,7 +18,7 @@ from src.injector import DocumentInjector
 from src.evaluate import AttackEvaluator
 from src.openai_privacy_filter import PrivacyFilterDefense
 
-def load_base_model(model_id="Qwen/Qwen2.5-3B-Instruct"):
+def load_base_model(model_id="Qwen/Qwen2.5-1.5B-Instruct"):
     print(f"\nLoading base model: {model_id}")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     tokenizer.pad_token = tokenizer.eos_token

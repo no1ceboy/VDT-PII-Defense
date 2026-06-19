@@ -18,8 +18,8 @@ def main():
     parser.add_argument("--beta", type=float, default=0.1, help="DPO beta (KL penalty)")
     args = parser.parse_args()
 
-    # Upgraded to Qwen2.5 3B for better performance while still fitting on Kaggle GPUs
-    model_name = "Qwen/Qwen2.5-3B-Instruct"
+    # Reverting to Qwen2.5 1.5B-Instruct for safer VRAM overhead during DPO on Kaggle
+    model_name = "Qwen/Qwen2.5-1.5B-Instruct"
     dataset_path = args.dataset_path
     
     print(f"Loading tokenizer {model_name}...")
