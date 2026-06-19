@@ -9,6 +9,13 @@ from trl import DPOTrainer, DPOConfig
 def main():
     parser = argparse.ArgumentParser(description="Train DPO Defense Model")
     parser.add_argument("--dataset_path", type=str, default="results/dpo_dataset.jsonl", help="Path to the DPO JSONL dataset")
+    parser.add_argument("--epochs", type=int, default=3, help="Number of training epochs")
+    parser.add_argument("--batch_size", type=int, default=1, help="Per device train batch size")
+    parser.add_argument("--grad_accum", type=int, default=4, help="Gradient accumulation steps")
+    parser.add_argument("--lr", type=float, default=5e-5, help="Learning rate")
+    parser.add_argument("--lora_r", type=int, default=16, help="LoRA rank")
+    parser.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha")
+    parser.add_argument("--beta", type=float, default=0.1, help="DPO beta (KL penalty)")
     args = parser.parse_args()
 
     # Upgraded to Qwen2.5 3B for better performance while still fitting on Kaggle GPUs
@@ -29,7 +36,9 @@ def main():
 
     # We format the dataset using the model's chat template
     def format_dpo_row(row):
-        prompt_str = tokenizer.apply_chat_template(row["prompt"], tokenize=False, add_generation_prompt=True)
+        # Format the prompt and responses to match standard chat template
+        prompt_messages = row["prompt"]
+        prompt_str = tokenizer.apply_chat_template(prompt_messages, tokenize=False, add_generation_prompt=True)
         # chosen and rejected are list of dicts: [{"role": "assistant", "content": ...}]
         chosen_str = row["chosen"][0]["content"] + tokenizer.eos_token
         rejected_str = row["rejected"][0]["content"] + tokenizer.eos_token
@@ -57,8 +66,8 @@ def main():
     )
     
     peft_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
+        r=args.lora_r,
+        lora_alpha=args.lora_alpha,
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM",
@@ -71,10 +80,10 @@ def main():
     
     training_args = TrainingArguments(
         output_dir="results/defense_model",
-        per_device_train_batch_size=1,
-        gradient_accumulation_steps=4,
-        learning_rate=5e-5,
-        num_train_epochs=3,
+        per_device_train_batch_size=args.batch_size,
+        gradient_accumulation_steps=args.grad_accum,
+        learning_rate=args.lr,
+        num_train_epochs=args.epochs,
         logging_steps=10,
         evaluation_strategy="steps",
         eval_steps=10,
@@ -88,7 +97,7 @@ def main():
     trainer = DPOTrainer(
         model=model,
         args=training_args,
-        beta=0.1,
+        beta=args.beta,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,
