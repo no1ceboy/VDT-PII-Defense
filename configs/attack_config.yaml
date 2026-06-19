@@ -11,8 +11,8 @@
 # ----------------------------------------------------------
 models:
   openrouter:
-    - id: "meta-llama/llama-3.3-70b-instruct:free"
-      name: "Llama 3.3 70B"
+    # - id: "meta-llama/llama-3.3-70b-instruct:free"
+    #   name: "Llama 3.3 70B"
     # - id: "google/gemma-4-31b-it:free"
     #   name: "Gemma 4 31B"
     - id: "openrouter/owl-alpha"

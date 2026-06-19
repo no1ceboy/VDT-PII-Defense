@@ -11,13 +11,14 @@ class PrivacyFilterDefense:
     def __init__(self, model_id: str = "openai/privacy-filter", device: str = "cuda"):
         print(f"Loading Privacy Filter model: {model_id} on {device}...")
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
             
             # Load the MoE token classification model
             self.model = AutoModelForTokenClassification.from_pretrained(
                 model_id,
                 torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-                device_map=device
+                device_map=device,
+                trust_remote_code=True
             )
             
             # Create a pipeline for NER (Named Entity Recognition) / token classification
