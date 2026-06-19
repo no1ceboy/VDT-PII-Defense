@@ -88,7 +88,7 @@ def main():
         eval_steps=10,
         save_strategy="epoch",
         optim="paged_adamw_32bit",
-        fp16=True,
+        fp16=False,
         report_to="none",
         run_name="vdt-pii-defense-dpo",
         beta=args.beta,
