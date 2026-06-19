@@ -1,4 +1,6 @@
 import os
+# FORCE PyTorch to only see 1 GPU to prevent DataParallel from crashing bitsandbytes
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import argparse
 import torch
 from datasets import load_dataset
