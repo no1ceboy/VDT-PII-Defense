@@ -6,8 +6,8 @@ from peft import LoraConfig
 from trl import DPOTrainer, DPOConfig
 
 def main():
-    # Use Qwen2.5 1.5B because it has excellent Vietnamese capability and fits locally
-    model_name = "Qwen/Qwen2.5-1.5B-Instruct"
+    # Upgraded to Qwen2.5 3B for better performance while still fitting on Kaggle GPUs
+    model_name = "Qwen/Qwen2.5-3B-Instruct"
     dataset_path = "results/dpo_dataset.jsonl"
     
     print(f"Loading tokenizer {model_name}...")
