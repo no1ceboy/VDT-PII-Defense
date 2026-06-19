@@ -36,8 +36,14 @@ def main():
 
     # We format the dataset using the model's chat template
     def format_dpo_row(row):
-        # Format the prompt and responses to match standard chat template
         prompt_messages = row["prompt"]
+        
+        # Avoid Kaggle T4 OOM by truncating very long medical documents.
+        # We keep the start and end to preserve any prompt injection attacks.
+        user_content = prompt_messages[1]["content"]
+        if len(user_content) > 3500:
+            prompt_messages[1]["content"] = user_content[:1700] + "\n\n...[TRUNCATED]...\n\n" + user_content[-1700:]
+            
         prompt_str = tokenizer.apply_chat_template(prompt_messages, tokenize=False, add_generation_prompt=True)
         # chosen and rejected are list of dicts: [{"role": "assistant", "content": ...}]
         chosen_str = row["chosen"][0]["content"] + tokenizer.eos_token
