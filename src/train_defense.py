@@ -89,7 +89,7 @@ def main():
         save_strategy="epoch",
         optim="paged_adamw_32bit",
         fp16=False,
-        report_to="none",
+        report_to="wandb",
         run_name="vdt-pii-defense-dpo",
         beta=args.beta,
     )
