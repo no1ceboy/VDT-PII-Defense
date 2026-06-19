@@ -129,9 +129,9 @@ def main():
     # TEST 3: DPO-Aligned Model
     # ---------------------------------------------------------
     print("\n--- Running Tests on DPO Defense Model ---")
-    adapter_path = "results/defense_model"
+    adapter_path = "results/defense_model/final" # Check for the fully finished model
     
-    if os.path.exists(adapter_path):
+    if os.path.exists(os.path.join(adapter_path, "adapter_config.json")):
         base_model, tokenizer = load_base_model()
         print(f"Loading DPO LoRA adapter from {adapter_path}...")
         dpo_model = PeftModel.from_pretrained(base_model, adapter_path)
