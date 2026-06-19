@@ -79,7 +79,8 @@ def run_pipeline(args):
     sampling_cfg = config.get("sampling", {})
     n_samples = args.samples or sampling_cfg.get("samples_per_dataset", 10)
     seed = sampling_cfg.get("random_seed", 42)
-    dataset_names = sampling_cfg.get("datasets", None)
+    # We strictly limit to the medical dataset because we are focusing exclusively on PII Leakage
+    dataset_names = ["medical"]
 
     logger.info(f"Loading datasets from: {datasets_dir}")
     loader = DataLoader(datasets_dir)
