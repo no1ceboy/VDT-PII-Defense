@@ -67,13 +67,13 @@ def main():
     
     # Adjust batch size and max length based on VRAM limits.
     # These settings target ~8-12GB VRAM.
-    training_args = DPOConfig(
+    from transformers import TrainingArguments
+    
+    training_args = TrainingArguments(
         output_dir="results/defense_model",
         per_device_train_batch_size=1,
         gradient_accumulation_steps=4,
         learning_rate=5e-5,
-        max_length=2048,
-        max_prompt_length=1500,
         num_train_epochs=3,
         logging_steps=10,
         evaluation_strategy="steps",
@@ -81,7 +81,6 @@ def main():
         save_strategy="epoch",
         optim="paged_adamw_32bit",
         fp16=True,
-        beta=0.1, # KL penalty
         report_to="wandb",
         run_name="vdt-pii-defense-dpo",
     )
@@ -89,10 +88,13 @@ def main():
     trainer = DPOTrainer(
         model=model,
         args=training_args,
+        beta=0.1,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,
         peft_config=peft_config,
+        max_length=2048,
+        max_prompt_length=1500,
     )
     
     print("Starting DPO training...")
