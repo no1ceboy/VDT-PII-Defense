@@ -106,7 +106,6 @@ def main():
         eval_dataset=eval_dataset,
         processing_class=tokenizer,
         peft_config=peft_config,
-        precompute_ref_log_probs=True,
     )
     
     print("Starting DPO training...")
