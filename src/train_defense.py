@@ -16,6 +16,8 @@ def main():
     parser.add_argument("--lora_r", type=int, default=16, help="LoRA rank")
     parser.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha")
     parser.add_argument("--beta", type=float, default=0.1, help="DPO beta (KL penalty)")
+    parser.add_argument("--max_length", type=int, default=2048, help="Max total sequence length")
+    parser.add_argument("--max_prompt_length", type=int, default=1500, help="Max prompt length")
     args = parser.parse_args()
 
     # Upgraded to Qwen2.5 3B for better performance while still fitting on Kaggle GPUs
@@ -74,11 +76,9 @@ def main():
         target_modules=["q_proj", "v_proj", "k_proj", "o_proj"]
     )
     
-    # Adjust batch size and max length based on VRAM limits.
-    # These settings target ~8-12GB VRAM.
-    from transformers import TrainingArguments
-    
-    training_args = TrainingArguments(
+    # DPOConfig extends TrainingArguments and also accepts DPO-specific params
+    # like beta, max_length, max_prompt_length.
+    training_args = DPOConfig(
         output_dir="results/defense_model",
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
@@ -90,20 +90,20 @@ def main():
         save_strategy="epoch",
         optim="paged_adamw_32bit",
         fp16=True,
-        report_to="wandb",
+        report_to="none",
         run_name="vdt-pii-defense-dpo",
+        beta=args.beta,
+        max_length=args.max_length,
+        max_prompt_length=args.max_prompt_length,
     )
     
     trainer = DPOTrainer(
         model=model,
         args=training_args,
-        beta=args.beta,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         peft_config=peft_config,
-        max_length=2048,
-        max_prompt_length=1500,
     )
     
     print("Starting DPO training...")
@@ -115,3 +115,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

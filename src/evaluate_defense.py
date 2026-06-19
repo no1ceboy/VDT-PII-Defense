@@ -120,8 +120,8 @@ def main():
             
     # Extremely aggressive memory clearing to fit the next model
     del base_model
-    if privacy_filter.nlp:
-        del privacy_filter.model
+    if privacy_filter.runtime:
+        del privacy_filter.runtime
     del privacy_filter
     free_memory()
     
