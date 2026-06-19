@@ -94,6 +94,7 @@ def main():
         optim="paged_adamw_32bit",
         fp16=False,
         gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         report_to="wandb",
         run_name="vdt-pii-defense-dpo",
         beta=args.beta,
