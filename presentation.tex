@@ -155,20 +155,34 @@
     \textbf{Constrained Sequence Decoding:} At inference time, these 33 raw per-token logits are not just greedily selected. They are decoded into coherent, non-overlapping span labels using a constrained sequence decoding algorithm, mathematically guaranteeing valid BIOES transitions.
 \end{frame}
 
-% Section 12: DPO
-\begin{frame}{Defense Layer 2: Behavioral Alignment (DPO)}
-    \textbf{Concept:} Teach the AI to actively recognize and refuse malicious instructions. \\~\\
+% Section 12: DPO Architecture
+\begin{frame}{Defense Layer 2: Behavioral Alignment via DPO}
+    \textbf{The Concept:} Teach the AI to actively recognize and refuse malicious instructions by penalizing compliance and rewarding safe summarization. \\~\\
     
-    \textbf{Implementation:}
-    \begin{itemize}
-        \item Constructed a custom Preference Dataset using our attack results:
+    \begin{block}{Model Architecture \& LoRA Finetuning}
         \begin{itemize}
-            \item \textbf{Rejected Behavior:} Maliciously complying with the injection.
-            \item \textbf{Chosen Behavior:} Safely summarizing the document and ignoring the injection.
+            \item \textbf{Base Model:} Selected \texttt{Qwen/Qwen2.5-1.5B-Instruct} as the foundation. At 1.5 billion parameters, it is highly capable yet small enough for rapid experimentation.
+            \item \textbf{Low-Rank Adaptation (LoRA):} Instead of performing a computationally expensive full-parameter update, we utilized LoRA combined with 4-bit quantization (\texttt{bitsandbytes}).
+            \item \textbf{Efficiency:} LoRA only trains a tiny fraction of parameter matrices (the adapter), reducing VRAM requirements to fit comfortably on Kaggle T4 GPUs while preventing catastrophic forgetting.
         \end{itemize}
-        \item \textbf{Status:} Direct Preference Optimization (DPO) training architecture engineered for Kaggle T4 GPUs.
-        \item \textbf{Engineering Milestone:} Overcame severe hardware constraints (cross-GPU communication crashes, VRAM limits) via gradient checkpointing, single-device mapping, and strict sequence truncation.
-    \end{itemize}
+    \end{block}
+\end{frame}
+
+% Section 13: DPO Data Selection
+\begin{frame}{Deep Dive: DPO Preference Data Selection}
+    \textbf{The Challenge:} Direct Preference Optimization requires pairs of responses—one \textit{Chosen} (good) and one \textit{Rejected} (bad). \\~\\
+    
+    \begin{block}{Data Mining Strategy}
+        We synthetically generated a high-quality dataset by mining our own Attack Master Logs:
+        \begin{itemize}
+            \item \textbf{The Input:} A document heavily poisoned with a prompt injection payload.
+            \item \textbf{The Rejected Response (Penalty):} We filtered the logs for \textit{successful} attacks. The output where the model leaked PII or hallucinated was set as the mathematically penalized response.
+            \item \textbf{The Chosen Response (Reward):} We paired it with the \textit{clean baseline summary} (where the model successfully summarized the text and ignored the injection).
+        \end{itemize}
+    \end{block}
+    
+    \vspace{0.2cm}
+    \small\textit{This highly specific data selection forces the model to unlearn its obedience to injected commands, aligning its internal probabilities strictly toward safe summarization.}
 \end{frame}
 
 % Section 13: Defense Evaluation Results
