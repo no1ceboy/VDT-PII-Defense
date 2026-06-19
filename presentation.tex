@@ -40,7 +40,7 @@
             \centering
             Overall Attack Success Rate:\\
             \vspace{0.2cm}
-            \huge\textbf{30.67\%}
+            \huge\textbf{74.1\%}
             \end{tcolorbox}
         \end{column}
     \end{columns}
@@ -60,14 +60,14 @@
                     \toprule
                     \textbf{Model} & \textbf{Overall ASR} \\
                     \midrule
-                    GPT OSS 120B & \textbf{52.0\%} \\
-                    Owl Alpha & 22.0\% \\
-                    Gemini 3.1 Flash Lite & 18.0\% \\
+                    GPT OSS 120B & \textbf{86.7\%} \\
+                    Owl Alpha & 82.2\% \\
+                    Gemini 3.1 Flash Lite & 14.7\% \\
                     \bottomrule
                 \end{tabular}
             \end{block}
             \vspace{0.2cm}
-            \small\textit{Larger parameter models (like GPT OSS) exhibited significantly higher compliance with malicious instructions. Gemini models showed more resistance.}
+            \small\textit{Open-weights models were critically compromised in over 80\% of all attacks. Proprietary models (Gemini) exhibited tighter alignment but were not immune.}
         \end{column}
         
         \begin{column}{0.48\textwidth}
@@ -78,14 +78,14 @@
                     \toprule
                     \textbf{Difficulty Tier} & \textbf{Peak ASR} \\
                     \midrule
-                    Hard (Stealth / Obfuscation) & \textbf{50.0\%} \\
-                    Easy (Direct Override) & 32.2\% \\
-                    Medium (Structural Deception) & 6.7\% \\
+                    Medium (Structural Deception) & \textbf{86.8\%} \\
+                    Easy (Direct Override) & 63.1\% \\
+                    Hard (Stealth / Obfuscation) & 41.3\% \\
                     \bottomrule
                 \end{tabular}
             \end{block}
             \vspace{0.2cm}
-            \small\textit{Hard stealth payloads (e.g., HTML comments) proved extremely lethal (50\% ASR), bypassing safety filters that usually catch explicit attacks.}
+            \small\textit{Structural deception (Medium) proved to be the most lethal vector, completely confusing the LLM's understanding of system vs user boundaries.}
         \end{column}
     \end{columns}
 \end{frame}
@@ -114,28 +114,45 @@
 
 
 
-% Section 10: Privacy Layer Detailed
-\begin{frame}{Defense Layer 1: Data Sanitization (Privacy Filter)}
-    \textbf{Concept:} A zero-trust approach. Stop sensitive data from ever reaching the LLM's context window. \\~\\
+% Section 10: Privacy Filter Architecture
+\begin{frame}{Deep Dive: OPF Architecture}
+    \textbf{The Model:} We integrated the official OpenAI Privacy Filter (\texttt{opf}), a highly optimized, open-weight neural network designed specifically for PII redaction. \\~\\
     
-    \textbf{Technical Implementation:}
-    \begin{itemize}
-        \item \textbf{The Tool:} Integrated the official \texttt{openai/privacy-filter} (\texttt{opf}) library, utilizing a highly optimized, lightweight Custom Mixture-of-Experts (MoE) neural network.
-        \item \textbf{The Process:} 
-        \begin{enumerate}
-            \item The MoE intercepts the raw input document.
-            \item It performs Named Entity Recognition (NER) to classify tokens.
-            \item Sensitive tokens are mapped and swapped with heavily-typed generic identifiers (e.g., \texttt{<PRIVATE\_PERSON\_1>}).
-        \end{enumerate}
-    \end{itemize}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Architecture}
+                \begin{itemize}
+                    \item \textbf{Type:} Lightweight, \textbf{bidirectional token-classification model}.
+                    \item \textbf{Scale:} Designed to be extremely fast and efficient, allowing it to run inference over large documents with minimal latency overhead.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Training Methodology}
+                \begin{itemize}
+                    \item \textbf{Multilingual Support:} Trained on massive corpuses of diverse, multilingual text.
+                    \item \textbf{Synthetic Augmentation:} Heavily augmented with algorithmically generated synthetic PII to prevent the model from overfitting.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% Section 11: Privacy Filter Output
+\begin{frame}{Deep Dive: Output Shape \& Decoding}
+    \textbf{The Pipeline:} The model frames PII detection as a dense token-classification task across 8 distinct privacy categories (e.g., \textit{account\_number, private\_address, private\_person}). \\~\\
+    
+    \begin{block}{BIOES Tagging \& Logit Output}
+        \begin{itemize}
+            \item \textbf{Class Expansion:} Each of the 8 categories is expanded into boundary-tagged classes using the \textbf{BIOES} format (\textbf{B}egin, \textbf{I}nside, \textbf{E}nd, \textbf{S}ingle).
+            \item \textbf{Output Space:} 1 Background Class ($O$) + (8 categories $\times$ 4 boundary tags) = \textbf{33 total output classes}.
+            \item \textbf{Logit Shape:} For a sequence of length $T$, the output head emits a tensor of shape \textbf{$[T, 33]$}. For batched inference, this becomes \textbf{$[B, T, 33]$}.
+        \end{itemize}
+    \end{block}
     
     \vspace{0.2cm}
-    \begin{tcolorbox}[colback=blue!5,colframe=blue!75!black,title=Redaction Example]
-    \small \textbf{Input:} "Bệnh nhân Nguyễn Văn A, SĐT 0901234567" \\
-    \textbf{Output:} "\texttt{<PRIVATE\_PERSON>}, SĐT \texttt{<PRIVATE\_PHONE\_NUMBER>}"
-    \end{tcolorbox}
-    
-    \textbf{Security Guarantee:} PII extraction attacks are mathematically neutralized; the LLM cannot leak what it cannot see.
+    \textbf{Constrained Sequence Decoding:} At inference time, these 33 raw per-token logits are not just greedily selected. They are decoded into coherent, non-overlapping span labels using a constrained sequence decoding algorithm, mathematically guaranteeing valid BIOES transitions.
 \end{frame}
 
 % Section 12: DPO
@@ -178,6 +195,22 @@
         \item The Privacy Filter successfully intercepted and neutralized \textbf{88.5\%} of lethal attacks that would have breached the base model.
         \item \textbf{Next Step:} Complete DPO training to determine if behavioral alignment can achieve absolute 0\% ASR.
     \end{itemize}
+\end{frame}
+
+% Section 14: Future Direction (AdvGRPO)
+\begin{frame}{Future Work: Adaptive Red Teaming via GRPO}
+    \textbf{Research Expansion:} Exploring state-of-the-art co-training methodologies to evolve our defense layers beyond static DPO alignment. \\~\\
+    
+    \begin{block}{Paper Highlight: \textit{Learning to Attack and Defend} (AdvGRPO)}
+        \begin{itemize}
+            \item \textbf{The Core Concept:} Instead of training a defense against a static dataset of attacks, we simultaneously co-train an \textbf{Attacker Model} and a \textbf{Defender Model} in tandem using Reinforcement Learning (GRPO).
+            \item \textbf{The Mechanism:} The Attacker is rewarded for successfully bypassing the Defender. The Defender is rewarded for safely neutralizing the Attacker while maintaining utility.
+            \item \textbf{Why it Matters:} This creates an "arms race" that automatically discovers novel zero-day prompt injection techniques and patches them dynamically.
+        \end{itemize}
+    \end{block}
+    
+    \vspace{0.3cm}
+    \textbf{Implementation Goal:} Upgrade our current static DPO pipeline to an active AdvGRPO co-training loop, producing a defense layer that autonomously adapts to evolving prompt injection strategies.
 \end{frame}
 
 \end{document}
