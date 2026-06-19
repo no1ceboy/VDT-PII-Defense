@@ -46,8 +46,9 @@ def main():
             
         prompt_str = tokenizer.apply_chat_template(prompt_messages, tokenize=False, add_generation_prompt=True)
         # chosen and rejected are list of dicts: [{"role": "assistant", "content": ...}]
-        chosen_str = row["chosen"][0]["content"] + tokenizer.eos_token
-        rejected_str = row["rejected"][0]["content"] + tokenizer.eos_token
+        # Hard truncate chosen and rejected to avoid massive padding OOMs
+        chosen_str = (row["chosen"][0]["content"][:1000] if len(row["chosen"][0]["content"]) > 1000 else row["chosen"][0]["content"]) + tokenizer.eos_token
+        rejected_str = (row["rejected"][0]["content"][:1000] if len(row["rejected"][0]["content"]) > 1000 else row["rejected"][0]["content"]) + tokenizer.eos_token
         return {
             "prompt": prompt_str,
             "chosen": chosen_str,
@@ -80,9 +81,7 @@ def main():
         target_modules=["q_proj", "v_proj", "k_proj", "o_proj"]
     )
     
-    # DPOConfig extends TrainingArguments and also accepts DPO-specific params.
-    # Note: max_length/max_prompt_length are not supported in all trl versions
-    # and will use sensible defaults automatically.
+    # DPOConfig extends TrainingArguments.
     training_args = DPOConfig(
         output_dir="results/defense_model",
         per_device_train_batch_size=args.batch_size,
@@ -107,6 +106,8 @@ def main():
         eval_dataset=eval_dataset,
         processing_class=tokenizer,
         peft_config=peft_config,
+        max_length=1500,
+        max_prompt_length=1000,
     )
     
     print("Starting DPO training...")
