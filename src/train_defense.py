@@ -1,4 +1,5 @@
 import os
+import argparse
 import torch
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
@@ -6,9 +7,13 @@ from peft import LoraConfig
 from trl import DPOTrainer, DPOConfig
 
 def main():
+    parser = argparse.ArgumentParser(description="Train DPO Defense Model")
+    parser.add_argument("--dataset_path", type=str, default="results/dpo_dataset.jsonl", help="Path to the DPO JSONL dataset")
+    args = parser.parse_args()
+
     # Upgraded to Qwen2.5 3B for better performance while still fitting on Kaggle GPUs
     model_name = "Qwen/Qwen2.5-3B-Instruct"
-    dataset_path = "results/dpo_dataset.jsonl"
+    dataset_path = args.dataset_path
     
     print(f"Loading tokenizer {model_name}...")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
