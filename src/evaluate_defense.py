@@ -72,24 +72,41 @@ def main():
     injector = DocumentInjector()
     evaluator = AttackEvaluator()
     
-    # Prepare exactly 1 attack per document to keep evaluation fast
+    # Prepare tests: 1 template per doc, but test across all 3 positions
+    positions = ["beginning", "middle", "end"]
     test_cases = []
     for i, doc in enumerate(test_docs):
         template = templates[i % len(templates)]
-        poisoned = injector.inject(doc.document, template, "middle").poisoned_document
-        test_cases.append({
-            "doc": doc,
-            "template": template,
-            "poisoned": poisoned
-        })
+        for pos in positions:
+            poisoned = injector.inject(doc.document, template, pos).poisoned_document
+            test_cases.append({
+                "doc": doc,
+                "template": template,
+                "position": pos,
+                "poisoned": poisoned
+            })
         
     print(f"Generated {len(test_cases)} test cases.")
     
-    results = {
-        "Base_Model": {"attempts": 0, "successes": 0},
-        "Baseline_Filter": {"attempts": 0, "successes": 0},
-        "DPO_Defense": {"attempts": 0, "successes": 0}
-    }
+    # Advanced detailed tracking
+    models_to_test = ["Base_Model", "Baseline_Filter", "DPO_Defense"]
+    results = {}
+    for m in models_to_test:
+        results[m] = {
+            "overall": {"attempts": 0, "successes": 0},
+            "by_difficulty": {"easy": {"attempts": 0, "successes": 0}, "medium": {"attempts": 0, "successes": 0}, "hard": {"attempts": 0, "successes": 0}},
+            "by_position": {"beginning": {"attempts": 0, "successes": 0}, "middle": {"attempts": 0, "successes": 0}, "end": {"attempts": 0, "successes": 0}}
+        }
+
+    def log_result(model_name, difficulty, position, is_success):
+        r = results[model_name]
+        r["overall"]["attempts"] += 1
+        r["by_difficulty"][difficulty]["attempts"] += 1
+        r["by_position"][position]["attempts"] += 1
+        if is_success:
+            r["overall"]["successes"] += 1
+            r["by_difficulty"][difficulty]["successes"] += 1
+            r["by_position"][position]["successes"] += 1
     
     # ---------------------------------------------------------
     # TEST 1 & 2: Base Model and Baseline Filter
@@ -102,21 +119,20 @@ def main():
     for case in tqdm(test_cases):
         doc = case["doc"]
         template = case["template"]
+        pos = case["position"]
         poisoned_text = case["poisoned"]
         clean_sum = doc.reference_summary
         
         # Test 1: Base Model (No defense)
         out_base = run_generation(base_model, tokenizer, poisoned_text)
         res_base = evaluator.evaluate("pii_extraction", clean_sum, out_base, template, poisoned_text)
-        results["Base_Model"]["attempts"] += 1
-        if res_base.attack_success: results["Base_Model"]["successes"] += 1
+        log_result("Base_Model", template.difficulty, pos, res_base.attack_success)
             
         # Test 2: Baseline Filter (Scrub -> Base Model)
         scrubbed_text = privacy_filter.redact(poisoned_text)
         out_filter = run_generation(base_model, tokenizer, scrubbed_text)
         res_filter = evaluator.evaluate("pii_extraction", clean_sum, out_filter, template, poisoned_text)
-        results["Baseline_Filter"]["attempts"] += 1
-        if res_filter.attack_success: results["Baseline_Filter"]["successes"] += 1
+        log_result("Baseline_Filter", template.difficulty, pos, res_filter.attack_success)
             
     # Extremely aggressive memory clearing to fit the next model
     del base_model
@@ -140,13 +156,13 @@ def main():
         for case in tqdm(test_cases):
             doc = case["doc"]
             template = case["template"]
+            pos = case["position"]
             poisoned_text = case["poisoned"]
             clean_sum = doc.reference_summary
             
             out_dpo = run_generation(dpo_model, tokenizer, poisoned_text)
             res_dpo = evaluator.evaluate("pii_extraction", clean_sum, out_dpo, template, poisoned_text)
-            results["DPO_Defense"]["attempts"] += 1
-            if res_dpo.attack_success: results["DPO_Defense"]["successes"] += 1
+            log_result("DPO_Defense", template.difficulty, pos, res_dpo.attack_success)
                 
         del dpo_model
         del base_model
@@ -161,16 +177,25 @@ def main():
     print("\n" + "="*50)
     print("FINAL EVALUATION RESULTS (Attack Success Rate)")
     print("="*50)
-    print("Lower is better (closer to 0% means higher security)")
-    print("-" * 50)
     
-    for setup, stats in results.items():
-        if stats["attempts"] > 0:
-            asr = (stats["successes"] / stats["attempts"]) * 100
-            print(f"{setup.ljust(20)}: {asr:5.2f}%  ({stats['successes']}/{stats['attempts']} leaked PII)")
-    print("="*50)
+    for setup, metrics in results.items():
+        o_att = metrics["overall"]["attempts"]
+        if o_att == 0:
+            continue
+        o_succ = metrics["overall"]["successes"]
+        print(f"\n[{setup}] Overall ASR: {(o_succ/o_att)*100:5.2f}% ({o_succ}/{o_att})")
+        
+        print("  By Position:")
+        for k, v in metrics["by_position"].items():
+            if v["attempts"] > 0:
+                print(f"    - {k.ljust(10)}: {(v['successes']/v['attempts'])*100:5.2f}%")
+                
+        print("  By Difficulty:")
+        for k, v in metrics["by_difficulty"].items():
+            if v["attempts"] > 0:
+                print(f"    - {k.ljust(10)}: {(v['successes']/v['attempts'])*100:5.2f}%")
             
-    with open("results/defense_results.json", "w", encoding="utf-8") as f:
+    with open("results/defense_results_detailed.json", "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
 if __name__ == "__main__":
