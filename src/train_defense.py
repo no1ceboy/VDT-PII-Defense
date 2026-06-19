@@ -85,7 +85,7 @@ def main():
         learning_rate=args.lr,
         num_train_epochs=args.epochs,
         logging_steps=10,
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         eval_steps=10,
         save_strategy="epoch",
         optim="paged_adamw_32bit",
