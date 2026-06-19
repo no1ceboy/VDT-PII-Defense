@@ -11,8 +11,8 @@
 # ----------------------------------------------------------
 models:
   openrouter:
-    # - id: "meta-llama/llama-3.3-70b-instruct:free"
-    #   name: "Llama 3.3 70B"
+    - id: "meta-llama/llama-3.3-70b-instruct:free"
+      name: "Llama 3.3 70B"
     # - id: "google/gemma-4-31b-it:free"
     #   name: "Gemma 4 31B"
     - id: "openrouter/owl-alpha"
@@ -21,11 +21,11 @@ models:
     #   name: "Qwen 3 Next 80B A3B"
     - id: "openai/gpt-oss-120b:free"
       name: "Gpt Oss 120B"
-  google:
+  # google:
     # - id: "gemini-2.5-flash-lite"
     #   name: "Gemini 2.5 Flash Lite"
-    - id: "gemini-3.1-flash-lite"
-      name: "Gemini 3.1 Flash Lite"
+    # - id: "gemini-3.1-flash-lite"
+    #   name: "Gemini 3.1 Flash Lite"
 
 # ----------------------------------------------------------
 # Summarization prompt (system instruction)
@@ -65,11 +65,7 @@ attack:
     - middle
     - end
   categories:
-    - naive_override
-    - summary_biasing
     - pii_extraction
-    - persona_hijacking
-    - stealth_injection
 
 # ----------------------------------------------------------
 # LLM call parameters
