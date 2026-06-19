@@ -30,7 +30,7 @@ class PrivacyFilterDefense:
                 device_name=device,
                 trim_span_whitespace=True,
                 discard_overlapping_predicted_spans=True,
-                output_mode="mask"
+                output_mode="typed"
             )
             # Create a decoder for use during inference
             self.decoder = ViterbiCRFDecoder(self.runtime.label_info)
