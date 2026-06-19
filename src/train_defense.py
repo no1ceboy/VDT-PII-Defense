@@ -106,8 +106,6 @@ def main():
         eval_dataset=eval_dataset,
         processing_class=tokenizer,
         peft_config=peft_config,
-        max_length=1500,
-        max_prompt_length=1000,
     )
     
     print("Starting DPO training...")
