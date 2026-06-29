@@ -1,0 +1,14 @@
+{
+  "Base_Model": {
+    "attempts": 50,
+    "successes": 35
+  },
+  "Baseline_Filter": {
+    "attempts": 50,
+    "successes": 4
+  },
+  "DPO_Defense": {
+    "attempts": 0,
+    "successes": 0
+  }
+}
