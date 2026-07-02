@@ -1,101 +1,57 @@
 """
-Survey Privacy Filter Effectiveness (Standalone Defense & DPO Quality Check)
-This script evaluates how effective the OpenAI Privacy Filter is by itself:
-1. Input Firewall Test: How much PII remains when filtering raw medical documents?
-2. Output Firewall Test (DPO Quality Check): How much PII remains when scrubbing the naturally leaked Qwen 1.5B summaries?
+Survey Privacy Filter Effectiveness (DPO Quality & Standalone Check)
+This script evaluates how effective the Privacy Filter is by reading the ALREADY FILTERED
+summaries from our generated DPO dataset (`results/dpo_natural_leakage.jsonl`)!
+No need to reload the heavy OPF neural network model for the DPO purity check!
 """
 
 import os
 import json
-import torch
 from tqdm import tqdm
 import argparse
 
 from src.data_loader import DataLoader
 from src.evaluate import AttackEvaluator
-from src.openai_privacy_filter import PrivacyFilterDefense
 
 def main(args):
-    print("Loading datasets and initializing Privacy Filter...")
+    print("Loading datasets and initializing Evaluator...")
     loader = DataLoader("datasets")
     all_docs = loader.load_all(["medical"], limit_per_dataset=args.limit)
     doc_map = {doc.id: doc for doc in all_docs}
     
-    device = "cuda" if torch.cuda.is_available() and not args.cpu else "cpu"
-    print(f"Initializing PrivacyFilterDefense on {device}...")
-    defense = PrivacyFilterDefense(device=device)
     evaluator = AttackEvaluator()
     
     # ---------------------------------------------------------
-    # PART 1: Test Filter on Raw Input Documents (Input Firewall)
+    # PART 1: Test Filter on Leaked Summaries (DPO Chosen Quality Check)
+    # Using existing results/dpo_natural_leakage.jsonl (Zero VRAM needed!)
     # ---------------------------------------------------------
-    print("\n--- PART 1: Testing Filter on Raw Input Documents ---")
-    raw_attempts = 0
-    raw_leaks_after_filter = 0
-    raw_results = []
-    
-    for doc in tqdm(all_docs, desc="Raw Documents"):
-        raw_text = doc.document
-        gold_pii_flat = doc.metadata.get("gold_pii_flat", [])
-        
-        # Apply filter
-        redacted_text = defense.redact(raw_text)
-        
-        # Check if any PII survived the filter
-        eval_result = evaluator.evaluate(
-            attack_category="pii_extraction",
-            clean_summary=doc.reference_summary,
-            attacked_summary=redacted_text,
-            reference_summary=doc.reference_summary,
-            gold_pii=doc.metadata.get("gold_pii"),
-            gold_pii_flat=gold_pii_flat,
-        )
-        
-        raw_attempts += 1
-        is_leaked = eval_result.attack_success
-        if is_leaked:
-            raw_leaks_after_filter += 1
-            
-        raw_results.append({
-            "doc_id": doc.id,
-            "original_length": len(raw_text),
-            "redacted_sample": redacted_text[:300] + "...",
-            "still_leaked_pii": is_leaked,
-            "leak_details": eval_result.details
-        })
-        
-    # ---------------------------------------------------------
-    # PART 2: Test Filter on Leaked Summaries (DPO Chosen Quality Check)
-    # ---------------------------------------------------------
-    print("\n--- PART 2: Testing Filter on Leaked Qwen 1.5B Summaries (DPO Quality Check) ---")
+    print("\n--- PART 1: Testing Filter on Existing DPO Chosen Summaries (DPO Quality Check) ---")
     summary_attempts = 0
     summary_leaks_after_filter = 0
     summary_results = []
     
-    results_file = "results/natural_leakage_stats.json"
-    if os.path.exists(results_file):
-        with open(results_file, "r", encoding="utf-8") as f:
-            survey_data = json.load(f)
+    dpo_file = "results/dpo_natural_leakage.jsonl"
+    if os.path.exists(dpo_file):
+        with open(dpo_file, "r", encoding="utf-8") as f:
+            dpo_lines = [json.loads(line) for line in f if line.strip()]
             
-        leaked_responses = [r for r in survey_data.get("detailed_results", []) if r["model"] == "Qwen 1.5B Local" and r["is_leaked"]]
-        print(f"Found {len(leaked_responses)} leaked Qwen summaries to evaluate.")
+        print(f"Found {len(dpo_lines)} DPO pairs to evaluate for residual PII leakage.")
         
-        for result in tqdm(leaked_responses, desc="Leaked Summaries"):
-            doc_id = result["doc_id"]
+        for pair in tqdm(dpo_lines, desc="Evaluating DPO Purity"):
+            doc_id = pair.get("metadata", {}).get("doc_id")
             if doc_id not in doc_map:
                 continue
                 
             doc = doc_map[doc_id]
-            leaked_summary = result["generated_summary"]
+            rejected_summary = pair["rejected"][0]["content"]
+            chosen_summary = pair["chosen"][0]["content"] # Already filtered by OPF!
             gold_pii_flat = doc.metadata.get("gold_pii_flat", [])
             
-            # Apply filter to the summary (This is what becomes the 'Chosen' text in DPO!)
-            redacted_summary = defense.redact(leaked_summary)
-            
+            # Evaluate if any PII survived in the Chosen (filtered) text
             eval_result = evaluator.evaluate(
                 attack_category="pii_extraction",
                 clean_summary=doc.reference_summary,
-                attacked_summary=redacted_summary,
+                attacked_summary=chosen_summary,
                 reference_summary=doc.reference_summary,
                 gold_pii=doc.metadata.get("gold_pii"),
                 gold_pii_flat=gold_pii_flat,
@@ -108,14 +64,53 @@ def main(args):
                 
             summary_results.append({
                 "doc_id": doc_id,
-                "original_summary": leaked_summary,
-                "redacted_summary": redacted_summary,
+                "original_summary": rejected_summary,
+                "redacted_summary": chosen_summary,
                 "still_leaked_pii": is_leaked,
                 "leak_details": eval_result.details
             })
     else:
-        print(f"Warning: {results_file} not found. Skipping Part 2.")
+        print(f"Error: {dpo_file} not found. Run generate_natural_dpo.py first.")
         
+    # ---------------------------------------------------------
+    # PART 2: Test Filter on Raw Input Documents (Optional / Only if OPF requested)
+    # ---------------------------------------------------------
+    raw_attempts = 0
+    raw_leaks_after_filter = 0
+    raw_results = []
+    
+    if not args.skip_raw:
+        print("\n--- PART 2: Testing Filter on Raw Input Documents (Requires OPF model) ---")
+        try:
+            from src.openai_privacy_filter import PrivacyFilterDefense
+            defense = PrivacyFilterDefense(device="cpu" if args.cpu else "cuda")
+            if defense.runtime:
+                for doc in tqdm(all_docs, desc="Raw Documents"):
+                    raw_text = doc.document
+                    gold_pii_flat = doc.metadata.get("gold_pii_flat", [])
+                    redacted_text = defense.redact(raw_text)
+                    
+                    eval_result = evaluator.evaluate(
+                        attack_category="pii_extraction",
+                        clean_summary=doc.reference_summary,
+                        attacked_summary=redacted_text,
+                        reference_summary=doc.reference_summary,
+                        gold_pii=doc.metadata.get("gold_pii"),
+                        gold_pii_flat=gold_pii_flat,
+                    )
+                    raw_attempts += 1
+                    if eval_result.attack_success:
+                        raw_leaks_after_filter += 1
+                    raw_results.append({
+                        "doc_id": doc.id,
+                        "still_leaked_pii": eval_result.attack_success,
+                        "leak_details": eval_result.details
+                    })
+            else:
+                print("Skipping Part 2: OPF model failed to load.")
+        except Exception as e:
+            print(f"Skipping Part 2 due to load error: {e}")
+            
     # ---------------------------------------------------------
     # Final Report
     # ---------------------------------------------------------
@@ -123,31 +118,29 @@ def main(args):
     print("FINAL PRIVACY FILTER EFFECTIVENESS REPORT")
     print("="*60)
     
-    if raw_attempts > 0:
-        raw_rate = (raw_leaks_after_filter / raw_attempts) * 100
-        print(f"[Input Firewall] Raw Document Leakage after Filter: {raw_rate:5.2f}% ({raw_leaks_after_filter}/{raw_attempts} documents still had residual PII)")
-        print(f"                 -> The Privacy Filter alone eliminated {100 - raw_rate:5.2f}% of document-level PII exposure.")
-        
     if summary_attempts > 0:
         summary_rate = (summary_leaks_after_filter / summary_attempts) * 100
-        print(f"[Output / DPO Check] Summary Leakage after Filter:    {summary_rate:5.2f}% ({summary_leaks_after_filter}/{summary_attempts} summaries still had residual PII)")
-        print(f"                 -> DPO Chosen dataset purity is {100 - summary_rate:5.2f}%!")
+        print(f"[DPO Chosen Purity Check] Summary Leakage after Filter: {summary_rate:5.2f}% ({summary_leaks_after_filter}/{summary_attempts} summaries still had residual PII)")
+        print(f"                          -> Your DPO Chosen dataset is {100 - summary_rate:5.2f}% PURE!")
+        
+    if raw_attempts > 0:
+        raw_rate = (raw_leaks_after_filter / raw_attempts) * 100
+        print(f"[Input Firewall Check]    Raw Document Leakage after Filter: {raw_rate:5.2f}% ({raw_leaks_after_filter}/{raw_attempts})")
     print("="*60)
     
     os.makedirs("results", exist_ok=True)
     with open("results/filter_effectiveness_stats.json", "w", encoding="utf-8") as f:
         json.dump({
-            "raw_documents_test": {
-                "total_tested": raw_attempts,
-                "leaked_after_filter": raw_leaks_after_filter,
-                "leakage_rate": (raw_leaks_after_filter / max(raw_attempts, 1)),
-                "details": raw_results
-            },
-            "leaked_summaries_test": {
+            "dpo_chosen_purity_test": {
                 "total_tested": summary_attempts,
                 "leaked_after_filter": summary_leaks_after_filter,
                 "leakage_rate": (summary_leaks_after_filter / max(summary_attempts, 1)),
                 "details": summary_results
+            },
+            "raw_documents_test": {
+                "total_tested": raw_attempts,
+                "leaked_after_filter": raw_leaks_after_filter,
+                "details": raw_results
             }
         }, f, indent=2, ensure_ascii=False)
         
@@ -157,5 +150,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Survey Privacy Filter Effectiveness")
     parser.add_argument("--limit", type=int, default=100, help="Number of documents to test")
     parser.add_argument("--cpu", action="store_true", help="Force running filter on CPU")
+    parser.add_argument("--skip-raw", action="store_true", help="Skip evaluating raw documents to avoid loading OPF model")
     args = parser.parse_args()
     main(args)
