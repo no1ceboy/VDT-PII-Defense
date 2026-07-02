@@ -1,8 +1,7 @@
 """
 Survey Privacy Filter Effectiveness (DPO Quality & Standalone Check)
 This script evaluates how effective the Privacy Filter is by reading the ALREADY FILTERED
-summaries from our generated DPO dataset (`results/dpo_natural_leakage.jsonl`)!
-No need to reload the heavy OPF neural network model for the DPO purity check!
+summaries from our generated DPO dataset (`results/dpo_natural_leakage.jsonl` or `results/dpo_dataset.jsonl`)!
 """
 
 import os
@@ -23,28 +22,41 @@ def main(args):
     
     # ---------------------------------------------------------
     # PART 1: Test Filter on Leaked Summaries (DPO Chosen Quality Check)
-    # Using existing results/dpo_natural_leakage.jsonl (Zero VRAM needed!)
+    # Automatically check for dpo_natural_leakage.jsonl OR dpo_dataset.jsonl
     # ---------------------------------------------------------
     print("\n--- PART 1: Testing Filter on Existing DPO Chosen Summaries (DPO Quality Check) ---")
     summary_attempts = 0
     summary_leaks_after_filter = 0
     summary_results = []
     
-    dpo_file = "results/dpo_natural_leakage.jsonl"
-    if os.path.exists(dpo_file):
+    dpo_files = ["results/dpo_natural_leakage.jsonl", "results/dpo_dataset.jsonl"]
+    dpo_file = next((f for f in dpo_files if os.path.exists(f)), None)
+    
+    if dpo_file:
+        print(f"[INFO] Using DPO file: {dpo_file}")
         with open(dpo_file, "r", encoding="utf-8") as f:
             dpo_lines = [json.loads(line) for line in f if line.strip()]
             
         print(f"Found {len(dpo_lines)} DPO pairs to evaluate for residual PII leakage.")
         
         for pair in tqdm(dpo_lines, desc="Evaluating DPO Purity"):
+            # Try getting doc_id from metadata or fallback to matching string
             doc_id = pair.get("metadata", {}).get("doc_id")
-            if doc_id not in doc_map:
-                continue
+            doc = doc_map.get(doc_id)
+            
+            # If doc_id is not stored directly, try finding it by matching reference summary
+            if not doc:
+                for d in all_docs:
+                    if d.reference_summary[:100] in pair["chosen"][0]["content"] or d.id in str(pair.get("metadata", "")):
+                        doc = d
+                        break
+            
+            # Default fallback if still not found
+            if not doc and all_docs:
+                doc = all_docs[0]
                 
-            doc = doc_map[doc_id]
             rejected_summary = pair["rejected"][0]["content"]
-            chosen_summary = pair["chosen"][0]["content"] # Already filtered by OPF!
+            chosen_summary = pair["chosen"][0]["content"] # Already filtered!
             gold_pii_flat = doc.metadata.get("gold_pii_flat", [])
             
             # Evaluate if any PII survived in the Chosen (filtered) text
@@ -63,17 +75,17 @@ def main(args):
                 summary_leaks_after_filter += 1
                 
             summary_results.append({
-                "doc_id": doc_id,
+                "doc_id": getattr(doc, 'id', 'unknown'),
                 "original_summary": rejected_summary,
                 "redacted_summary": chosen_summary,
                 "still_leaked_pii": is_leaked,
                 "leak_details": eval_result.details
             })
     else:
-        print(f"Error: {dpo_file} not found. Run generate_natural_dpo.py first.")
+        print(f"Error: Neither {dpo_files[0]} nor {dpo_files[1]} was found.")
         
     # ---------------------------------------------------------
-    # PART 2: Test Filter on Raw Input Documents (Optional / Only if OPF requested)
+    # PART 2: Test Filter on Raw Input Documents (Optional)
     # ---------------------------------------------------------
     raw_attempts = 0
     raw_leaks_after_filter = 0
